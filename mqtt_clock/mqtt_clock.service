@@ -1,0 +1,15 @@
+[Unit]
+Description="MQTT clock"
+Requires=network.target local-fs.target
+After=network.target local-fs.target
+
+[Service]
+Type=simple
+User=iotdev
+Group=iotdev
+ExecStart=/home/iotdev/iotdev.venv3/bin/python /home/iotdev/iotdev.venv3/src/mqtt_clock/mqtt_clock.py <server>
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
