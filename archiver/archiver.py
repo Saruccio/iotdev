@@ -242,7 +242,17 @@ def on_message(client, userdata, msg):
     On message receiving the corresponding Json will be pushed into a list
     to be processed later by archiver function
     """
-    data = json.loads(msg.payload)
+    if msg.payload is None:
+        logger.warning("Empty (None) payload received")
+        return
+
+    try:
+        data = json.loads(msg.payload)
+    except:
+        logger.error("Conversion msg payload to JSON failed")
+        logger.error("Reason: {}".format(sys.exc_info()))
+        return
+
     if 'timestamp' not in data.keys():
         now = datetime.datetime.now().isoformat()
         dot = now.rfind(".")
