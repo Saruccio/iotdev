@@ -1,6 +1,5 @@
 wheel
 paho-mqtt
 time2relax
-
-
-
+matplotlib
+uncertainties
