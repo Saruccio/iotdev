@@ -24,11 +24,11 @@ from loguru import logger
 import configuration as config
 import uncertainties as uncert
 import statistics as stats
-import copy
+import threading
 
 
 # Program name and version
-PROGNAME = "historicizer"
+PROGNAME = "dsarchiver"
 PROGDESCR = "Measurement data archiver"
 VERSION = "0.1.0"
 
@@ -48,7 +48,7 @@ def connect_db(ini: dict, db_name):
     # Validate mqtt configuration parameters
     if not config.verify_params(ini, 'couchdb',
                          ['server', 'port', 'user', 'password',
-                         'readfom_dbname', 'writeto_dbname',
+                         'realtime_dbname', 'datastore_dbname',
                          'devices_dbname']):
         return None
 
@@ -384,6 +384,28 @@ def archive_series(dbs: Databases, topic: str, timespan: int):
         dbs.db_realtime.remove(result['_id'], result['_rev'])
     return True
 
+
+class TopicThread(threading.Thread):
+    def __init__(self, topic: str, timespan: int, dbs: Databases):
+        super().__init__(name=topic)
+        self.topic = topic
+        self.dbs = dbs
+        self.timespan = timespan
+        self.stop_process = False
+
+    def stop(self):
+        self.stop_process = True
+
+    def run(self):
+        # Archives topic's dataset 5 minutes at time
+        data_available = True
+        while data_available and (not self.stop_process):
+            # Read from queue in order to stop gracefully
+            data_available = archive_series(self.dbs, self.topic, self.timespan)
+
+
+
+
 @logger.catch
 def main():
     """
@@ -423,11 +445,29 @@ def main():
     topics = get_topic_list(dbs)
     logger.info("Available topics: '{}'".format(topics))
 
+    # Thread dictionary
+    threads = dict()
+
+    # Create a thread for each topic
     for topic in topics:
-        # Archives topic's dataset 5 minutes at time
-        data_available = True
-        while data_available:
-            data_available = archive_series(dbs, topic, 10)
+        threads[topic] = TopicThread(topic, 10, dbs)
+        threads[topic].start()
+        logger.info("Thread '{}' started".format(threads[topic].name))
+
+    # Thread monitoring
+    still_running = True
+    while still_running:
+        thr_counter = 0
+        for thr in threads:
+            if threads[thr].is_alive():
+                thr_counter += 1
+            else:
+                logger.info("Thread '{}' exited".format(threads[thr].name))
+        if thr_counter == 0:
+            still_running = False
+        time.sleep(1)
+
+    logger.info("{} exited".format(PROGNAME))
 
 
 if __name__ == "__main__":
